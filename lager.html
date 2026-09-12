@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GodteriFyll – Lager</title>
+<style>
+  :root {
+    --ok: #2ecc71; --low: #f39c12; --crit: #e74c3c;
+    --bg: #12141a; --card: #1c1f28; --text: #f5f5f5; --muted: #9aa0ac;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); padding:16px; }
+  header { margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  h1 { font-size:1.4rem; margin:0; }
+  .subtitle { color:var(--muted); font-size:0.85rem; margin-top:4px; }
+  a.navlink { color:#3b82f6; font-size:0.85rem; text-decoration:none; }
+  #debugBox { display:none; background:#2a1616; border:1px solid #e74c3c; color:#ffcccc; padding:12px; border-radius:8px; font-size:0.78rem; margin-bottom:16px; white-space:pre-wrap; word-break:break-word; }
+  #loadingBox { color:var(--muted); font-size:0.85rem; padding:20px 0; text-align:center; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .tab { background:var(--card); border:1px solid #2a2e38; color:var(--text); padding:8px 14px; border-radius:20px; cursor:pointer; font-size:0.85rem; }
+  .tab.active { background:#3b82f6; border-color:#3b82f6; }
+  .stats { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .stat-card { background:var(--card); border-radius:10px; padding:10px 16px; text-align:center; min-width:90px; }
+  .stat-num { font-size:1.4rem; font-weight:700; }
+  .stat-label { font-size:0.7rem; color:var(--muted); text-transform:uppercase; }
+  .search-box { width:100%; padding:10px 14px; border-radius:10px; border:1px solid #2a2e38; background:var(--card); color:var(--text); font-size:0.9rem; margin-bottom:16px; }
+  .inv-list { display:flex; flex-direction:column; gap:8px; }
+  .inv-item { background:var(--card); border-radius:10px; padding:12px 14px; border-left:5px solid var(--muted); }
+  .inv-item.crit { border-left-color:var(--crit); }
+  .inv-item.low { border-left-color:var(--low); }
+  .inv-item.ok { border-left-color:var(--ok); }
+  .inv-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .inv-name { font-weight:600; font-size:0.92rem; }
+  .inv-sub { font-size:0.72rem; color:var(--muted); }
+  .badge { font-size:0.7rem; padding:3px 9px; border-radius:12px; text-transform:uppercase; font-weight:700; }
+  .badge.crit { background:var(--crit); color:white; }
+  .badge.low { background:var(--low); color:#1a1a1a; }
+  .badge.ok { background:var(--ok); color:#1a1a1a; }
+  .inv-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .inv-controls label { font-size:0.72rem; color:var(--muted); display:flex; flex-direction:column; gap:3px; }
+  .inv-controls input { width:80px; padding:6px 8px; border-radius:6px; border:1px solid #2a2e38; background:#12141a; color:var(--text); font-size:0.85rem; }
+  .btn { background:#3b82f6; color:white; border:none; padding:8px 12px; border-radius:8px; font-size:0.8rem; cursor:pointer; }
+  .btn.secondary { background:transparent; border:1px solid #333; color:var(--muted); }
+  .empty-state { color:var(--muted); text-align:center; padding:30px; }
+  #retryBtn { background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:8px; margin-top:8px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📦 GodteriFyll – Lager</h1>
+    <div class="subtitle">Lagerbeholdning og bestillingsvarsel</div>
+  </div>
+  <a class="navlink" href="index.html">← Til hylleoversikt</a>
+</header>
+
+<div id="debugBox"></div>
+<div id="loadingBox">Laster lagerdata...</div>
+
+<div id="appContent" style="display:none">
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="order">Må bestilles</div>
+    <div class="tab" data-view="all">Alt på lager</div>
+  </div>
+
+  <input type="text" class="search-box" id="searchBox" placeholder="Søk etter produkt...">
+
+  <div id="listView"></div>
+</div>
+
+<script>
+function showDebug(msg) {
+  var box = document.getElementById('debugBox');
+  box.style.display = 'block';
+  box.textContent = "⚠️ Feil oppstod:\n\n" + msg;
+  var btn = document.createElement('button');
+  btn.id = 'retryBtn';
+  btn.textContent = 'Prøv igjen';
+  btn.onclick = function() { location.reload(); };
+  box.appendChild(document.createElement('br'));
+  box.appendChild(btn);
+  document.getElementById('loadingBox').style.display = 'none';
+}
+window.addEventListener('error', function(e) {
+  showDebug("JS-feil: " + e.message + "\nLinje: " + (e.lineno || '?'));
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="showDebug('Kunne ikke laste Supabase-biblioteket.')"></script>
+
+<script>
+try {
+  if (typeof window.supabase === 'undefined') {
+    throw new Error("Supabase-biblioteket ble ikke lastet.");
+  }
+
+  var SUPABASE_URL = "https://xiwmyghrlxioqdtkuqkk.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_ErXdyl4BV0kfFqRSJPe7eQ_UVOGhGrK";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var items = [];
+  var currentView = 'order';
+  var searchTerm = '';
+
+  function statusOf(item) {
+    if (item.quantity_kg <= 0) return 'crit';
+    if (item.quantity_kg <= item.min_threshold_kg) return 'low';
+    return 'ok';
+  }
+
+  function loadData() {
+    sb.from('inventory').select('*').order('product_name').then(function(res) {
+      if (res.error) {
+        showDebug("Supabase-feil: " + res.error.message);
+        return;
+      }
+      items = res.data;
+      document.getElementById('loadingBox').style.display = 'none';
+      document.getElementById('appContent').style.display = 'block';
+      renderStats();
+      renderList();
+    }).catch(function(err) {
+      showDebug("Nettverksfeil: " + (err && err.message ? err.message : JSON.stringify(err)));
+    });
+  }
+
+  function renderStats() {
+    var crit = 0, low = 0, ok = 0;
+    items.forEach(function(i) {
+      var s = statusOf(i);
+      if (s === 'crit') crit++; else if (s === 'low') low++; else ok++;
+    });
+    document.getElementById('stats').innerHTML =
+      '<div class="stat-card"><div class="stat-num" style="color:#e74c3c">' + crit + '</div><div class="stat-label">Tomt</div></div>' +
+      '<div class="stat-card"><div class="stat-num" style="color:#f39c12">' + low + '</div><div class="stat-label">Lavt</div></div>' +
+      '<div class="stat-card"><div class="stat-num" style="color:#2ecc71">' + ok + '</div><div class="stat-label">OK</div></div>';
+  }
+
+  function renderList() {
+    var filtered = items.filter(function(i) {
+      return i.product_name.toLowerCase().indexOf(searchTerm.toLowerCase()) !== -1;
+    });
+    if (currentView === 'order') {
+      filtered = filtered.filter(function(i) { return statusOf(i) !== 'ok'; });
+      filtered.sort(function(a,b) { return a.quantity_kg - b.quantity_kg; });
+    } else {
+      filtered.sort(function(a,b) { return a.product_name.localeCompare(b.product_name); });
+    }
+    var el = document.getElementById('listView');
+    if (filtered.length === 0) {
+      el.innerHTML = '<div class="empty-state">' + (currentView === 'order' ? 'Ingenting å bestille akkurat nå! 🎉' : 'Ingen produkter funnet.') + '</div>';
+      return;
+    }
+    var statusLabel = { crit: 'Tomt', low: 'Lavt', ok: 'OK' };
+    var html = '<div class="inv-list">';
+    filtered.forEach(function(i) {
+      var s = statusOf(i);
+      html += '<div class="inv-item ' + s + '" data-id="' + i.id + '">' +
+        '<div class="inv-top"><div><div class="inv-name">' + i.product_name + '</div>' +
+        '<div class="inv-sub">' + (i.supplier || 'Ingen leverandør satt') + '</div></div>' +
+        '<span class="badge ' + s + '">' + statusLabel[s] + '</span></div>' +
+        '<div class="inv-controls">' +
+        '<label>Mengde (kg)<input type="number" step="0.1" value="' + i.quantity_kg + '" data-field="quantity_kg" data-id="' + i.id + '"></label>' +
+        '<label>Min.grense (kg)<input type="number" step="0.1" value="' + i.min_threshold_kg + '" data-field="min_threshold_kg" data-id="' + i.id + '"></label>' +
+        '<button class="btn" data-save="' + i.id + '">Lagre</button>' +
+        '</div></div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+
+    var saveBtns = document.querySelectorAll('[data-save]');
+    for (var k = 0; k < saveBtns.length; k++) {
+      saveBtns[k].addEventListener('click', function() {
+        var id = this.dataset.save;
+        var qInput = document.querySelector('input[data-field="quantity_kg"][data-id="' + id + '"]');
+        var mInput = document.querySelector('input[data-field="min_threshold_kg"][data-id="' + id + '"]');
+        var newQ = parseFloat(qInput.value);
+        var newM = parseFloat(mInput.value);
+        sb.from('inventory').update({
+          quantity_kg: newQ, min_threshold_kg: newM, updated_at: new Date().toISOString()
+        }).eq('id', id).then(function(res) {
+          if (res.error) { showDebug("Feil ved lagring: " + res.error.message); return; }
+          loadData();
+        });
+      });
+    }
+  }
+
+  document.querySelectorAll('.tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      currentView = tab.dataset.view;
+      renderList();
+    });
+  });
+
+  document.getElementById('searchBox').addEventListener('input', function(e) {
+    searchTerm = e.target.value;
+    renderList();
+  });
+
+  try {
+    sb.channel('inventory_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, function() { loadData(); })
+      .subscribe();
+  } catch (e) {}
+
+  loadData();
+
+} catch (fatalErr) {
+  showDebug("Kritisk feil: " + (fatalErr && fatalErr.message ? fatalErr.message : JSON.stringify(fatalErr)));
+}
+</script>
+</body>
+</html>
