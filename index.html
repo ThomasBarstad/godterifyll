@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GodteriFyll – Påfyllingsstatus</title>
+<style>
+  :root {
+    --tom: #e74c3c;
+    --lavt: #f39c12;
+    --halvfullt: #f1c40f;
+    --fullt: #2ecc71;
+    --bg: #12141a;
+    --card: #1c1f28;
+    --text: #f5f5f5;
+    --muted: #9aa0ac;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  header { margin-bottom: 16px; }
+  h1 { font-size: 1.4rem; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+  #debugBox {
+    display: none;
+    background: #2a1616;
+    border: 1px solid #e74c3c;
+    color: #ffcccc;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #loadingBox {
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 20px 0;
+    text-align: center;
+  }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    background: var(--card);
+    border: 1px solid #2a2e38;
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .tab.active { background: #3b82f6; border-color: #3b82f6; }
+  .legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .row-group { margin-bottom: 22px; }
+  .row-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .bin {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 12px;
+    border-left: 5px solid var(--muted);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  .bin:active { transform: scale(0.97); }
+  .bin.tom { border-left-color: var(--tom); background: linear-gradient(90deg, rgba(231,76,60,0.15), var(--card)); }
+  .bin.lavt { border-left-color: var(--lavt); background: linear-gradient(90deg, rgba(243,156,18,0.15), var(--card)); }
+  .bin.halvfullt { border-left-color: var(--halvfullt); background: linear-gradient(90deg, rgba(241,196,15,0.12), var(--card)); }
+  .bin.fullt { border-left-color: var(--fullt); background: linear-gradient(90deg, rgba(46,204,113,0.12), var(--card)); }
+  .bin-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 4px; }
+  .bin-level { font-size: 0.75rem; color: var(--muted); text-transform: capitalize; }
+  .priority-list { display: flex; flex-direction: column; gap: 8px; }
+  .priority-item {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 5px solid var(--muted);
+  }
+  .priority-item.tom { border-left-color: var(--tom); }
+  .priority-item.lavt { border-left-color: var(--lavt); }
+  .badge { font-size: 0.7rem; padding: 3px 9px; border-radius: 12px; text-transform: uppercase; font-weight: 700; }
+  .badge.tom { background: var(--tom); color: white; }
+  .badge.lavt { background: var(--lavt); color: #1a1a1a; }
+  .badge.halvfullt { background: var(--halvfullt); color: #1a1a1a; }
+  .badge.fullt { background: var(--fullt); color: #1a1a1a; }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; padding: 20px; width: 90%; max-width: 340px; }
+  .modal h3 { margin: 0 0 12px; }
+  .level-btn {
+    width: 100%; padding: 12px; margin-bottom: 8px; border: none;
+    border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white;
+  }
+  .level-btn.tom { background: var(--tom); }
+  .level-btn.lavt { background: var(--lavt); color: #1a1a1a; }
+  .level-btn.halvfullt { background: var(--halvfullt); color: #1a1a1a; }
+  .level-btn.fullt { background: var(--fullt); color: #1a1a1a; }
+  .close-btn { width: 100%; padding: 10px; background: transparent; border: 1px solid #333; color: var(--muted); border-radius: 8px; cursor: pointer; margin-top: 4px; }
+  .empty-state { color: var(--muted); text-align: center; padding: 30px; }
+  .stats { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-card { background: var(--card); border-radius: 10px; padding: 10px 16px; text-align: center; min-width: 90px; }
+  .stat-num { font-size: 1.4rem; font-weight: 700; }
+  .stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+  #retryBtn {
+    background: #3b82f6; color: white; border: none; padding: 8px 16px;
+    border-radius: 8px; margin-top: 8px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍬 GodteriFyll</h1>
+  <div class="subtitle">Pick & Mix – påfyllingsstatus</div>
+</header>
+
+<div id="debugBox"></div>
+<div id="loadingBox">Laster data...</div>
+
+<div id="appContent" style="display:none">
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="grid">Hylleoversikt</div>
+    <div class="tab" data-view="priority">Prioritetsliste</div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:#e74c3c"></span> Tom</span>
+    <span><span class="dot" style="background:#f39c12"></span> Lavt</span>
+    <span><span class="dot" style="background:#f1c40f"></span> Halvfullt</span>
+    <span><span class="dot" style="background:#2ecc71"></span> Fullt</span>
+  </div>
+
+  <div id="gridView"></div>
+  <div id="priorityView" style="display:none"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Boks</h3>
+    <button class="level-btn tom" data-level="tom">Tom</button>
+    <button class="level-btn lavt" data-level="lavt">Lavt</button>
+    <button class="level-btn halvfullt" data-level="halvfullt">Halvfullt</button>
+    <button class="level-btn fullt" data-level="fullt">Fullt</button>
+    <button class="close-btn" id="closeModal">Avbryt</button>
+  </div>
+</div>
+
+<script>
+function showDebug(msg) {
+  var box = document.getElementById('debugBox');
+  box.style.display = 'block';
+  box.textContent = "⚠️ Feil oppstod:\n\n" + msg + "\n\nTrykk knappen for å prøve igjen.";
+  var btn = document.createElement('button');
+  btn.id = 'retryBtn';
+  btn.textContent = 'Prøv igjen';
+  btn.onclick = function() { location.reload(); };
+  box.appendChild(document.createElement('br'));
+  box.appendChild(btn);
+  document.getElementById('loadingBox').style.display = 'none';
+}
+
+window.addEventListener('error', function(e) {
+  showDebug("JS-feil: " + e.message + "\nFil: " + (e.filename || '?') + " Linje: " + (e.lineno || '?'));
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="showDebug('Kunne ikke laste Supabase-biblioteket fra CDN. Sjekk internettforbindelse eller prøv igjen.')"></script>
+
+<script>
+try {
+
+  if (typeof window.supabase === 'undefined') {
+    throw new Error("Supabase-biblioteket ble ikke lastet (window.supabase er undefined). CDN-scriptet kan ha blitt blokkert.");
+  }
+
+  var SUPABASE_URL = "https://xiwmyghrlxioqdtkuqkk.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_ErXdyl4BV0kfFqRSJPe7eQ_UVOGhGrK";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var bins = [];
+  var currentBinId = null;
+  var levelOrder = { tom: 0, lavt: 1, halvfullt: 2, fullt: 3 };
+  var levelLabel = { tom: "Tom", lavt: "Lavt", halvfullt: "Halvfullt", fullt: "Fullt" };
+
+  function loadData() {
+    sb.from('bins')
+      .select('id, name, category, row_num, side, position, fill_status(level, updated_at)')
+      .order('row_num').order('side').order('position')
+      .then(function(res) {
+        if (res.error) {
+          showDebug("Supabase-feil ved lasting av data:\n" + res.error.message + "\n\nDetaljer: " + JSON.stringify(res.error));
+          return;
+        }
+        bins = res.data.map(function(b) {
+          var fs = (b.fill_status && b.fill_status[0]) ? b.fill_status[0] : null;
+          return {
+            id: b.id, name: b.name, category: b.category,
+            row: b.row_num, side: b.side, position: b.position,
+            level: fs ? fs.level : 'fullt',
+            updated_at: fs ? fs.updated_at : null
+          };
+        });
+        document.getElementById('loadingBox').style.display = 'none';
+        document.getElementById('appContent').style.display = 'block';
+        renderStats();
+        renderGrid();
+        renderPriority();
+      })
+      .catch(function(err) {
+        showDebug("Nettverksfeil ved kontakt med Supabase:\n" + (err && err.message ? err.message : JSON.stringify(err)));
+      });
+  }
+
+  function renderStats() {
+    var counts = { tom: 0, lavt: 0, halvfullt: 0, fullt: 0 };
+    bins.forEach(function(b) { counts[b.level] = (counts[b.level] || 0) + 1; });
+    document.getElementById('stats').innerHTML =
+      '<div class="stat-card"><div class="stat-num" style="color:#e74c3c">' + counts.tom + '</div><div class="stat-label">Tomme</div></div>' +
+      '<div class="stat-card"><div class="stat-num" style="color:#f39c12">' + counts.lavt + '</div><div class="stat-label">Lavt</div></div>' +
+      '<div class="stat-card"><div class="stat-num" style="color:#f1c40f">' + counts.halvfullt + '</div><div class="stat-label">Halvfullt</div></div>' +
+      '<div class="stat-card"><div class="stat-num" style="color:#2ecc71">' + counts.fullt + '</div><div class="stat-label">Fullt</div></div>';
+  }
+
+  function renderGrid() {
+    var rows = [];
+    bins.forEach(function(b) { if (rows.indexOf(b.row) === -1) rows.push(b.row); });
+    rows.sort(function(a,b){ return a-b; });
+    var html = '';
+    rows.forEach(function(rowNum) {
+      var rowBins = bins.filter(function(b){ return b.row === rowNum; })
+        .sort(function(a,b){
+          if (a.side !== b.side) return a.side > b.side ? 1 : -1;
+          return a.position - b.position;
+        });
+      html += '<div class="row-group"><div class="row-title">Rad ' + rowNum + '</div><div class="grid">';
+      rowBins.forEach(function(b) {
+        html += '<div class="bin ' + b.level + '" data-id="' + b.id + '">' +
+          '<div class="bin-name">' + b.name + '</div>' +
+          '<div class="bin-level">' + levelLabel[b.level] + '</div></div>';
+      });
+      html += '</div></div>';
+    });
+    document.getElementById('gridView').innerHTML = html;
+    var els = document.querySelectorAll('.bin');
+    for (var i = 0; i < els.length; i++) {
+      els[i].addEventListener('click', function() { openModal(this.dataset.id); });
+    }
+  }
+
+  function renderPriority() {
+    var sorted = bins.slice().sort(function(a,b){ return levelOrder[a.level] - levelOrder[b.level]; });
+    var critical = sorted.filter(function(b){ return b.level === 'tom' || b.level === 'lavt'; });
+    var el = document.getElementById('priorityView');
+    if (critical.length === 0) {
+      el.innerHTML = '<div class="empty-state">Alt er godt fylt! 🎉</div>';
+      return;
+    }
+    var html = '<div class="priority-list">';
+    critical.forEach(function(b) {
+      html += '<div class="priority-item ' + b.level + '" data-id="' + b.id + '">' +
+        '<div><div class="bin-name">' + b.name + '</div>' +
+        '<div class="bin-level">Rad ' + b.row + ' · ' + b.side + '</div></div>' +
+        '<span class="badge ' + b.level + '">' + levelLabel[b.level] + '</span></div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    var els = document.querySelectorAll('.priority-item');
+    for (var i = 0; i < els.length; i++) {
+      els[i].addEventListener('click', function() { openModal(this.dataset.id); });
+    }
+  }
+
+  function openModal(id) {
+    currentBinId = id;
+    var bin = bins.filter(function(b){ return b.id === id; })[0];
+    document.getElementById('modalTitle').textContent = bin.name;
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    currentBinId = null;
+  }
+
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target.id === 'modalOverlay') closeModal();
+  });
+
+  var levelBtns = document.querySelectorAll('.level-btn');
+  for (var j = 0; j < levelBtns.length; j++) {
+    levelBtns[j].addEventListener('click', function() {
+      var level = this.dataset.level;
+      if (!currentBinId) return;
+      sb.from('fill_status').update({
+        level: level, updated_at: new Date().toISOString(), updated_by: 'web'
+      }).eq('bin_id', currentBinId).then(function() {
+        return sb.from('fill_log').insert({ bin_id: currentBinId, level: level, changed_by: 'web' });
+      }).then(function() {
+        closeModal();
+        loadData();
+      }).catch(function(err) {
+        showDebug("Feil ved lagring:\n" + (err && err.message ? err.message : JSON.stringify(err)));
+      });
+    });
+  }
+
+  var tabs = document.querySelectorAll('.tab');
+  for (var k = 0; k < tabs.length; k++) {
+    tabs[k].addEventListener('click', function() {
+      for (var m = 0; m < tabs.length; m++) tabs[m].classList.remove('active');
+      this.classList.add('active');
+      var view = this.dataset.view;
+      document.getElementById('gridView').style.display = view === 'grid' ? 'block' : 'none';
+      document.getElementById('priorityView').style.display = view === 'priority' ? 'block' : 'none';
+    });
+  }
+
+  try {
+    sb.channel('fill_status_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fill_status' }, function() { loadData(); })
+      .subscribe();
+  } catch (rtErr) {
+    // Realtime is non-critical; ignore failures silently
+  }
+
+  loadData();
+
+} catch (fatalErr) {
+  showDebug("Kritisk feil i oppstart:\n" + (fatalErr && fatalErr.message ? fatalErr.message : JSON.stringify(fatalErr)));
+}
+</script>
+</body>
+</html>
